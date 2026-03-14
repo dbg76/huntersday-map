@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Hunters Day Live Participation Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#f2f2f2;
+}
+
+header{
+background:#0e2341;
+color:white;
+padding:18px;
+text-align:center;
+}
+
+header h1{
+margin:0 0 8px 0;
+font-size:24px;
+}
+
+header p{
+margin:0;
+font-size:14px;
+opacity:0.95;
+}
+
+.stats{
+display:flex;
+justify-content:center;
+gap:20px;
+padding:12px;
+background:white;
+flex-wrap:wrap;
+}
+
+.stat{
+border:2px solid #0e2341;
+border-radius:10px;
+padding:10px 18px;
+text-align:center;
+min-width:140px;
+background:white;
+}
+
+.stat h3{
+margin:0;
+font-size:14px;
+color:#666;
+font-weight:normal;
+}
+
+.stat p{
+margin:6px 0 0 0;
+font-size:24px;
+font-weight:bold;
+color:#0e2341;
+}
+
+.status{
+display:none;
+background:#f4ecd0;
+color:#333;
+padding:14px 18px;
+text-align:center;
+font-size:14px;
+border-top:1px solid #ddd;
+border-bottom:1px solid #ddd;
+}
+
+#map{
+height:calc(100vh - 210px);
+width:100%;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>Hunters Day Live Participation Map</h1>
+<p>Paddlers across the UK supporting hospice care</p>
+</header>
+
+<div class="stats">
+
+<div class="stat">
+<h3>Total Clubs</h3>
+<p id="clubs">0</p>
+</div>
+
+<div class="stat">
+<h3>Total Paddlers</h3>
+<p id="paddlers">0</p>
+</div>
+
+</div>
+
+<div class="status" id="statusBox"></div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+const SHEET_ID = "1_6stM63d7umTSeHUEUkD04_Zic4nt2nHkxgP8nBCWMI";
+const SHEET_NAME = "Form Responses 1";
+
+const ukBounds = [
+[49.8,-8.7],
+[60.9,2.1]
+];
+
+const map = L.map("map",{
+center:[54.5,-3],
+zoom:6,
+minZoom:5,
+maxZoom:18
+});
+
+map.setMaxBounds(ukBounds);
+
+L.tileLayer(
+"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+{
+attribution:"&copy; OpenStreetMap contributors &copy; CARTO",
+subdomains:"abcd",
+maxZoom:20
+}
+).addTo(map);
+
+function showStatus(message){
+const box=document.getElementById("statusBox");
+box.style.display="block";
+box.textContent=message;
+}
+
+function hideStatus(){
+const box=document.getElementById("statusBox");
+box.style.display="none";
+box.textContent="";
+}
+
+function parseCoords(text){
+
+if(!text)return null;
+
+const match=String(text).match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+
+if(match){
+return{
+lat:Number(match[1]),
+lng:Number(match[2])
+};
+}
+
+return null;
+
+}
+
+async function loadData(){
+
+const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tqx=out:json`;
+
+try{
+
+showStatus("Loading live participation data...");
+
+const response=await fetch(url);
+const text=await response.text();
+
+const jsonText=text.match(/setResponse\(([\s\S]+)\);/)[1];
+const json=JSON.parse(jsonText);
+
+const rows=json.table.rows||[];
+
+let clubCount=0;
+let paddlerTotal=0;
+let validPins=0;
+const bounds=[];
+
+rows.forEach(row=>{
+
+const cells=row.c||[];
+
+const club=cells[1]?.v?String(cells[1].v).trim():"";
+const pin=cells[2]?.v?String(cells[2].v).trim():"";
+const latRaw=cells[4]?.v;
+const lngRaw=cells[5]?.v;
+const paddlersRaw=cells[6]?.v;
+
+if(club)clubCount++;
+
+const paddlers=Number(paddlersRaw)||0;
+paddlerTotal+=paddlers;
+
+let lat=Number(latRaw);
+let lng=Number(lngRaw);
+
+if(isNaN(lat)||isNaN(lng)){
+
+const parsed=parseCoords(pin);
+
+if(parsed){
+lat=parsed.lat;
+lng=parsed.lng;
+}
+
+}
+
+if(!isNaN(lat)&&!isNaN(lng)){
+
+L.marker([lat,lng])
+.addTo(map)
+.bindPopup(`<b>${club||"Unnamed entry"}</b><br>Paddlers: ${paddlers}`);
+
+bounds.push([lat,lng]);
+validPins++;
+
+}
+
+});
+
+document.getElementById("clubs").textContent=clubCount;
+document.getElementById("paddlers").textContent=paddlerTotal;
+
+hideStatus();
+
+if(validPins===0){
+
+showStatus("No valid map coordinates found yet.");
+map.fitBounds(ukBounds);
+
+}
+else if(validPins===1){
+
+map.setView(bounds[0],10);
+
+}
+else{
+
+map.fitBounds(bounds,{padding:[30,30]});
+
+}
+
+}
+catch(error){
+
+console.error(error);
+showStatus("Could not load live participation data yet.");
+map.fitBounds(ukBounds);
+
+}
+
+}
+
+loadData();
+
+</script>
+
+</body>
+</html>
