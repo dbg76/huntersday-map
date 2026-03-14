@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hunters Day Live Participation Map</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+    }
+
+    .topbar {
+      background: #0E2341;
+      color: white;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .topbar h1 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+    }
+
+    .topbar p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.95;
+    }
+
+    .stats {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      padding: 12px;
+      background: white;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .stat-box {
+      background: #ffffff;
+      border: 2px solid #0E2341;
+      border-radius: 10px;
+      padding: 10px 16px;
+      min-width: 140px;
+      text-align: center;
+    }
+
+    .stat-box .label {
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    .stat-box .value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #0E2341;
+    }
+
+    #map {
+      height: calc(100vh - 170px);
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <h1>Hunters Day Live Participation Map</h1>
+    <p>Paddlers across the UK supporting hospice care</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat-box">
+      <div class="label">Total Clubs</div>
+      <div class="value" id="clubCount">0</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Total Paddlers</div>
+      <div class="value" id="paddlerCount">0</div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([54.5, -3], 6);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const data = [
+      {
+        club: "Colchester Canoe Club",
+        lat: 51.962194,
+        lng: 0.993944,
+        paddlers: 1
+      }
+    ];
+
+    let totalClubs = data.length;
+    let totalPaddlers = data.reduce((sum, row) => sum + row.paddlers, 0);
+
+    document.getElementById('clubCount').textContent = totalClubs;
+    document.getElementById('paddlerCount').textContent = totalPaddlers;
+
+    data.forEach(row => {
+      L.marker([row.lat, row.lng])
+        .addTo(map)
+        .bindPopup(`<b>${row.club}</b><br>Paddlers: ${row.paddlers}`);
+    });
+  </script>
+</body>
+</html>
