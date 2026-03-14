@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Hunters Day – Add Your Paddle</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+    }
+
+    header {
+      background: #0e2341;
+      color: white;
+      padding: 18px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+    }
+
+    header p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.95;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #0e2341;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      font-size: 16px;
+    }
+
+    #map {
+      height: 420px;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .coords-box {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f7f7f7;
+      border-radius: 8px;
+      color: #333;
+      font-size: 14px;
+    }
+
+    button {
+      width: 100%;
+      background: #0e2341;
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      display: none;
+      font-size: 14px;
+    }
+
+    .status.success {
+      display: block;
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+
+    .status.error {
+      display: block;
+      background: #ffebee;
+      color: #b71c1c;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #555;
+      margin-top: -6px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>Hunters Day – Add Your Paddle</h1>
+    <p>Tap the map to place your club or group on the Hunters Day live participation map</p>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <label for="club">Club / Group Name</label>
+      <input id="club" type="text" placeholder="e.g. Colchester Canoe Club">
+
+      <label for="paddlers">Number of paddlers</label>
+      <input id="paddlers" type="number" min="1" step="1" placeholder="e.g. 12">
+
+      <label for="photo">Optional photo link</label>
+      <input id="photo" type="url" placeholder="Optional">
+
+      <div class="small">Tap the map below to drop your pin.</div>
+      <div id="map"></div>
+
+      <div class="coords-box" id="coordsBox">
+        No pin selected yet.
+      </div>
+
+      <button id="submitBtn">Submit to Hunters Day Map</button>
+
+      <div class="status" id="statusBox"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const FORM_ACTION = "https://docs.google.com/forms/d/e/1FAIpQLSf7PXO87sAMQsV3b-vZSnsQXdnMQv1tW_YWznF8tc5TcRs6Rg/formResponse";
+
+    const FIELD_CLUB = "entry.712164457";
+    const FIELD_PIN = "entry.664612782";
+    const FIELD_PADDLERS = "entry.1531351935";
+    const FIELD_PHOTO = "entry.1535912600";
+
+    const ukBounds = [
+      [49.8, -8.7],
+      [60.9, 2.1]
+    ];
+
+    const map = L.map("map", {
+      center: [54.5, -3],
+      zoom: 6,
+      minZoom: 5,
+      maxZoom: 18
+    });
+
+    map.setMaxBounds(ukBounds);
+
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { attribution: "&copy; OpenStreetMap contributors" }
+    ).addTo(map);
+
+    let marker = null;
+    let selectedLat = "";
+    let selectedLng = "";
+
+    const coordsBox = document.getElementById("coordsBox");
+    const statusBox = document.getElementById("statusBox");
+    const submitBtn = document.getElementById("submitBtn");
+
+    map.on("click", function(e) {
+      selectedLat = e.latlng.lat.toFixed(6);
+      selectedLng = e.latlng.lng.toFixed(6);
+
+      if (marker) {
+        map.removeLayer(marker);
+      }
+
+      marker = L.marker([selectedLat, selectedLng]).addTo(map);
+      coordsBox.textContent = `Selected pin: ${selectedLat}, ${selectedLng}`;
+    });
+
+    function showStatus(message, type) {
+      statusBox.className = "status " + type;
+      statusBox.textContent = message;
+    }
+
+    async function submitForm() {
+      const club = document.getElementById("club").value.trim();
+      const paddlers = document.getElementById("paddlers").value.trim();
+      const photo = document.getElementById("photo").value.trim();
+      const pinValue = selectedLat && selectedLng ? `${selectedLat},${selectedLng}` : "";
+
+      if (!club) {
+        showStatus("Please enter a club or group name.", "error");
+        return;
+      }
+
+      if (!paddlers || Number(paddlers) < 1) {
+        showStatus("Please enter a valid number of paddlers.", "error");
+        return;
+      }
+
+      if (!pinValue) {
+        showStatus("Please tap the map to drop your pin.", "error");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      showStatus("Submitting...", "success");
+
+      try {
+        const formData = new FormData();
+        form
