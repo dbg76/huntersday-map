@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Hunters Day Live Participation Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#f2f2f2;
+}
+
+header{
+  background:#0e2341;
+  color:white;
+  padding:22px;
+  text-align:center;
+}
+
+header h1{
+  margin:0;
+  font-size:26px;
+}
+
+header p{
+  margin:6px 0 0 0;
+  font-size:14px;
+}
+
+.banner{
+  background:#f6a800;
+  color:#0e2341;
+  font-weight:bold;
+  text-align:center;
+  padding:10px;
+  font-size:16px;
+}
+
+.controls{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  background:white;
+  flex-wrap:wrap;
+}
+
+button{
+  background:#0e2341;
+  color:white;
+  border:none;
+  padding:8px 16px;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:14px;
+}
+
+.stats{
+  display:flex;
+  justify-content:center;
+  gap:20px;
+  padding:10px;
+  background:white;
+  flex-wrap:wrap;
+}
+
+.stat{
+  border:2px solid #0e2341;
+  border-radius:10px;
+  padding:10px 16px;
+  text-align:center;
+  min-width:130px;
+  background:white;
+}
+
+.stat h3{
+  margin:0;
+  font-size:13px;
+  color:#666;
+  font-weight:normal;
+}
+
+.stat p{
+  margin:4px 0 0 0;
+  font-size:22px;
+  font-weight:bold;
+  color:#0e2341;
+}
+
+#map{
+  height:calc(100vh - 260px);
+  width:100%;
+}
+
+.watermark{
+  position:absolute;
+  bottom:10px;
+  left:10px;
+  background:rgba(255,255,255,0.88);
+  padding:6px 10px;
+  border-radius:6px;
+  font-size:12px;
+  z-index:500;
+}
+
+#lastUpdate{
+  color:#0e2341;
+  font-weight:bold;
+}
+
+/* Remove default cluster bubble styling */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large{
+  background:transparent !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div{
+  background:transparent !important;
+  border:none !important;
+  width:auto !important;
+  height:auto !important;
+  margin:0 !important;
+  border-radius:0 !important;
+  color:inherit !important;
+  font:inherit !important;
+}
+
+.hd-cluster-wrap{
+  position:relative;
+  width:46px;
+  height:64px;
+}
+
+.hd-cluster-count{
+  position:absolute;
+  top:17px;
+  left:50%;
+  transform:translateX(-50%);
+  color:#f6e81b;
+  font-weight:bold;
+  font-size:14px;
+  line-height:1;
+  font-family:Arial,Helvetica,sans-serif;
+  pointer-events:none;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Hunters Day Live Participation Map</h1>
+  <p>Paddlers across the UK supporting hospice care</p>
+</header>
+
+<div class="banner" id="liveBanner">
+  Loading participation...
+</div>
+
+<div class="controls">
+  <button onclick="loadData()">Refresh Map</button>
+  <button onclick="shareMap()">Share Map</button>
+  <span id="lastUpdate"></span>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <h3>Total Groups</h3>
+    <p id="groups">0</p>
+  </div>
+
+  <div class="stat">
+    <h3>Total Paddlers</h3>
+    <p id="paddlers">0</p>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="watermark">
+  Hunters Day • Supporting Hospice Care
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+<script>
+const SHEET_ID = "1_6stM63d7umTSeHUEUkD04_Zic4nt2nHkxgP8nBCWMI";
+const SHEET_NAME = "Form Responses 1";
+
+/* Slightly looser UK bounds so the map doesn't feel like it snaps back */
+const ukBounds = [
+  [49.5, -10.5],
+  [61.2, 3.0]
+];
+
+/* The exact UK opening view we want */
+const ukViewBounds = [
+  [49.8, -8.7],
+  [60.9, 2.1]
+];
+
+const map = L.map("map", {
+  zoomControl: true,
+  minZoom: 5,
+  maxZoom: 18,
+  maxBoundsViscosity: 0.7
+});
+
+map.setMaxBounds(ukBounds);
+
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  {
+    attribution: "© OpenStreetMap contributors © CARTO",
+    subdomains: "abcd",
+    maxZoom: 20
+  }
+).addTo(map);
+
+/* Slimmer HD pin SVG */
+const pinSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="46" height="64" viewBox="0 0 46 64">
+  <path d="M23 62 C23 62 35 39 35 24 C35 13.5 30 6 23 6 C16 6 11 13.5 11 24 C11 39 23 62 23 62 Z"
+        fill="#0e2341" stroke="#0e2341" stroke-width="2"/>
+  <text x="23" y="25" text-anchor="middle" font-family="Arial, Helvetica, sans-serif"
+        font-size="14" font-weight="bold" fill="#f6e81b">HD</text>
+</svg>
+`;
+
+const hdIcon = L.icon({
+  iconUrl: "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(pinSvg),
+  iconSize: [46, 64],
+  iconAnchor: [23, 64],
+  popupAnchor: [0, -52]
+});
+
+function createClusterIcon(count){
+  return L.divIcon({
+    html: `
+      <div class="hd-cluster-wrap">
+        <img src="data:image/svg+xml;charset=UTF-8,${encodeURIComponent(pinSvg)}" width="46" height="64" alt="">
+        <div class="hd-cluster-count">${count}</div>
+      </div>
+    `,
+    className: "",
+    iconSize: [46, 64],
+    iconAnchor: [23, 64]
+  });
+}
+
+const markers = L.markerClusterGroup({
+  showCoverageOnHover: false,
+  spiderfyOnMaxZoom: true,
+  maxClusterRadius: 40,
+  iconCreateFunction: function(cluster) {
+    return createClusterIcon(cluster.getChildCount());
+  }
+});
+
+map.addLayer(markers);
+
+function resetToUKView(){
+  map.fitBounds(ukViewBounds, {
+    padding: [8, 8],
+    animate: false
+  });
+}
+
+function parseCoords(text) {
+  if (!text) return null;
+
+  const match = String(text).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (match) {
+    return {
+      lat: Number(match[1]),
+      lng: Number(match[2])
+    };
+  }
+
+  return null;
+}
+
+async function loadData() {
+  markers.clearLayers();
+
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tqx=out:json`;
+
+  try {
+    const response = await fetch(url);
+    const text = await response.text();
+    const jsonText = text.match(/setResponse\\(([\s\S]+)\\);/)[1];
+    const json = JSON.parse(jsonText);
+    const rows = json.table.rows || [];
+
+    let groupCount = 0;
+    let paddlerTotal = 0;
+
+    rows.forEach(row => {
+      const c = row.c || [];
+
+      const group = c[1]?.v ? String(c[1].v).trim() : "";
+      const pin = c[2]?.v ? String(c[2].v).trim() : "";
+      const paddlers = Number(c[6]?.v) || 0;
+
+      if (group) groupCount++;
+      paddlerTotal += paddlers;
+
+      const coords = parseCoords(pin);
+
+      if (coords) {
+        const marker = L.marker([coords.lat, coords.lng], { icon: hdIcon })
+          .bindPopup(`<b>${group || "Unnamed group"}</b><br>Paddlers: ${paddlers}`);
+
+        markers.addLayer(marker);
+      }
+    });
+
+    document.getElementById("groups").textContent = groupCount;
+    document.getElementById("paddlers").textContent = paddlerTotal;
+    document.getElementById("liveBanner").textContent =
+      paddlerTotal + " paddlers on the water • " + groupCount + " groups taking part";
+
+    const now = new Date();
+    document.getElementById("lastUpdate").textContent =
+      "Last updated " + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    /* Always return to the intended UK view after loading/refeshing */
+    resetToUKView();
+
+  } catch (error) {
+    console.error(error);
+    document.getElementById("liveBanner").textContent = "Could not load participation data";
+    resetToUKView();
+  }
+}
+
+function shareMap() {
+  const url = window.location.href;
+
+  if (navigator.share) {
+    navigator.share({
+      title: "Hunters Day Live Participation Map",
+      text: "Paddlers across the UK supporting hospice care",
+      url: url
+    }).catch(() => {});
+    return;
+  }
+
+  navigator.clipboard.writeText(url);
+  alert("Map link copied to clipboard");
+}
+
+/* Make sure the map sizes itself properly before first fit */
+window.addEventListener("load", function(){
+  setTimeout(function(){
+    map.invalidateSize();
+    resetToUKView();
+    loadData();
+  }, 150);
+});
+</script>
+
+</body>
+</html>
