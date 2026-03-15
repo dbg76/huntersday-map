@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<meta charset="utf-8"/>
+<title>Hunters Day Live Participation Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial,Helvetica,sans-serif;
+background:#f2f2f2;
+}
+
+header{
+background:#0e2341;
+color:white;
+padding:22px;
+text-align:center;
+}
+
+header h1{
+margin:0;
+font-size:26px;
+}
+
+header p{
+margin:6px 0 0 0;
+font-size:14px;
+}
+
+.banner{
+background:#f6a800;
+color:#0e2341;
+font-weight:bold;
+text-align:center;
+padding:10px;
+font-size:16px;
+}
+
+.controls{
+display:flex;
+justify-content:center;
+gap:10px;
+padding:10px;
+background:white;
+flex-wrap:wrap;
+}
+
+button{
+background:#0e2341;
+color:white;
+border:none;
+padding:8px 16px;
+border-radius:6px;
+cursor:pointer;
+font-size:14px;
+}
+
+.stats{
+display:flex;
+justify-content:center;
+gap:20px;
+padding:10px;
+background:white;
+flex-wrap:wrap;
+}
+
+.stat{
+border:2px solid #0e2341;
+border-radius:10px;
+padding:10px 16px;
+text-align:center;
+min-width:130px;
+}
+
+.stat h3{
+margin:0;
+font-size:13px;
+color:#666;
+font-weight:normal;
+}
+
+.stat p{
+margin:4px 0 0 0;
+font-size:22px;
+font-weight:bold;
+color:#0e2341;
+}
+
+#map{
+height:calc(100vh - 260px);
+}
+
+.watermark{
+position:absolute;
+bottom:10px;
+left:10px;
+background:rgba(255,255,255,0.85);
+padding:6px 10px;
+border-radius:6px;
+font-size:12px;
+}
+
+.marker-cluster-small {
+background-color: rgba(14,35,65,0.6);
+}
+
+.marker-cluster-small div {
+background-color: rgba(14,35,65,0.9);
+color:white;
+font-weight:bold;
+}
+
+.marker-cluster-medium {
+background-color: rgba(14,35,65,0.6);
+}
+
+.marker-cluster-medium div {
+background-color: rgba(14,35,65,0.9);
+color:white;
+font-weight:bold;
+}
+
+.marker-cluster-large {
+background-color: rgba(14,35,65,0.6);
+}
+
+.marker-cluster-large div {
+background-color: rgba(14,35,65,0.9);
+color:white;
+font-weight:bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+<h1>Hunters Day Live Participation Map</h1>
+<p>Paddlers across the UK supporting hospice care</p>
+
+</header>
+
+<div class="banner" id="liveBanner">
+
+Loading participation...
+
+</div>
+
+<div class="controls">
+
+<button onclick="loadData()">Refresh Map</button>
+
+<button onclick="shareMap()">Share Map</button>
+
+<span id="lastUpdate"></span>
+
+</div>
+
+<div class="stats">
+
+<div class="stat">
+
+<h3>Total Groups</h3>
+
+<p id="groups">0</p>
+
+</div>
+
+<div class="stat">
+
+<h3>Total Paddlers</h3>
+
+<p id="paddlers">0</p>
+
+</div>
+
+</div>
+
+<div id="map"></div>
+
+<div class="watermark">
+
+Hunters Day • Supporting Hospice Care
+
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+<script>
+
+const SHEET_ID="1_6stM63d7umTSeHUEUkD04_Zic4nt2nHkxgP8nBCWMI";
+
+const SHEET_NAME="Form Responses 1";
+
+const map=L.map("map",{center:[54.5,-3],zoom:6,minZoom:5,maxZoom:18});
+
+L.tileLayer(
+
+"https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+
+{attribution:"© OpenStreetMap contributors"}
+
+).addTo(map);
+
+const markers=L.markerClusterGroup();
+
+map.addLayer(markers);
+
+const hdIcon = L.icon({
+
+iconUrl:"hdpin.png",
+
+iconSize:[42,58],
+
+iconAnchor:[21,58],
+
+popupAnchor:[0,-50]
+
+});
+
+function parseCoords(text){
+
+if(!text)return null;
+
+const match=String(text).match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+
+if(match){
+
+return{
+
+lat:Number(match[1]),
+
+lng:Number(match[2])
+
+};
+
+}
+
+return null;
+
+}
+
+async function loadData(){
+
+map.setView([54.5,-3],6);
+
+markers.clearLayers();
+
+const url=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&tqx=out:json`;
+
+const response=await fetch(url);
+
+const text=await response.text();
+
+const jsonText=text.match(/setResponse\(([\s\S]+)\);/)[1];
+
+const json=JSON.parse(jsonText);
+
+const rows=json.table.rows||[];
+
+let groupCount=0;
+
+let paddlerTotal=0;
+
+rows.forEach(row=>{
+
+const c=row.c||[];
+
+const group=c[1]?.v||"";
+
+const pin=c[2]?.v||"";
+
+const paddlers=Number(c[6]?.v)||0;
+
+if(group)groupCount++;
+
+paddlerTotal+=paddlers;
+
+const coords=parseCoords(pin);
+
+if(coords){
+
+const marker=L.marker([coords.lat,coords.lng],{icon:hdIcon})
+
+.bindPopup(`<b>${group}</b><br>Paddlers: ${paddlers}`);
+
+markers.addLayer(marker);
+
+}
+
+});
+
+document.getElementById("groups").textContent=groupCount;
+
+document.getElementById("paddlers").textContent=paddlerTotal;
+
+document.getElementById("liveBanner").textContent=
+
+paddlerTotal+" paddlers on the water • "+groupCount+" groups taking part";
+
+const now=new Date();
+
+document.getElementById("lastUpdate").textContent=
+
+"Last updated "+now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+}
+
+function shareMap(){
+
+navigator.clipboard.writeText(window.location.href);
+
+alert("Map link copied to clipboard");
+
+}
+
+loadData();
+
+</script>
+
+</body>
+</html>
